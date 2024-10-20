@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Deformable Walnut</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #501a1a;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+        .message {
+            position: absolute;
+            font-size: 2em;
+            color: rgb(250, 150, 78);
+            opacity: 0;
+            transition: opacity 0.3s ease-in;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="walnutCanvas"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Three.js setup
+        let scene = new THREE.Scene();
+        let camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        let renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('walnutCanvas'), antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // Walnut geometry (you can replace this with a real walnut model)
+        let geometry = new THREE.SphereGeometry(2, 32, 32);  // Placeholder geometry for walnut
+        let material = new THREE.MeshStandardMaterial({ color: 0x8B4513, flatShading: true });
+        let walnut = new THREE.Mesh(geometry, material);
+        walnut.geometry.dynamic = true;  // Enable dynamic geometry for deformation
+        scene.add(walnut);
+
+        // Lighting
+        let light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 5, 5).normalize();
+        scene.add(light);
+
+        // Camera position
+        camera.position.z = 5;
+
+        let isDragging = false;
+        let dragStart = null;
+        let messagesShown = 0;  // Track the number of "信息" messages shown
+        let maxMessages = 50;  // Maximum number of messages before stopping the drag
+        let colorChangeRate = 0.01;  // Control how fast the color changes
+        let totalDragDistance = 0;  // Track the total amount of dragging
+
+        // Mouse coordinates and raycasting setup
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+
+        // Add event listeners for drag and drop
+        window.addEventListener('mousedown', onMouseDown);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+
+        function onMouseDown(event) {
+            if (messagesShown >= maxMessages) return;  // Stop interaction if maximum messages are shown
+            isDragging = true;
+            dragStart = { x: event.clientX, y: event.clientY };
+        }
+
+        function onMouseMove(event) {
+            if (isDragging && messagesShown < maxMessages) {
+                let deltaX = event.clientX - dragStart.x;
+                let deltaY = event.clientY - dragStart.y;
+
+                // Rotate walnut based on mouse movement
+                walnut.rotation.y += deltaX * 0.01;
+                walnut.rotation.x += deltaY * 0.01;
+
+                // Update total drag distance
+                totalDragDistance += Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                // Deform walnut shape based on drag
+                deformWalnut(event.clientX, event.clientY);
+
+                dragStart = { x: event.clientX, y: event.clientY };
+
+                // Gradually change walnut color to red-brown
+                let color = walnut.material.color;
+                if (color.r < 0.55) {
+                    color.r = Math.min(0.55, color.r + colorChangeRate); // R component max 0.55 for red-brown
+                }
+                if (color.g > 0.27) {
+                    color.g = Math.max(0.27, color.g - colorChangeRate); // G component to simulate brown
+                }
+                if (color.b > 0.13) {
+                    color.b = Math.max(0.13, color.b - colorChangeRate); // B component to simulate deep brown
+                }
+
+                // Show random "信息" message based on total drag distance
+                if (totalDragDistance > 50) {  // Show faster with more dragging
+                    totalDragDistance = 0;  // Reset drag distance to control message appearance
+                    showMessage();
+                }
+            }
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+        }
+
+        function deformWalnut(mouseX, mouseY) {
+            // Convert screen coordinates to normalized device coordinates (-1 to +1)
+            mouse.x = (mouseX / window.innerWidth) * 2 - 1;
+            mouse.y = -(mouseY / window.innerHeight) * 2 + 1;
+
+            // Use raycaster to find the intersecting point on the walnut
+            raycaster.setFromCamera(mouse, camera);
+            let intersects = raycaster.intersectObject(walnut);
+
+            if (intersects.length > 0) {
+                let intersect = intersects[0];
+                let face = intersect.face;
+                let geometry = walnut.geometry;
+
+                // Deform the vertices of the intersected face
+                let vertices = geometry.attributes.position.array;
+
+                // Deform each vertex by pushing it outward from the center
+                let vertexIndices = [face.a, face.b, face.c];
+                vertexIndices.forEach(vertexIndex => {
+                    vertices[vertexIndex * 3] += (Math.random() - 0.5) * 0.1;  // Deform X
+                    vertices[vertexIndex * 3 + 1] += (Math.random() - 0.5) * 0.1;  // Deform Y
+                    vertices[vertexIndex * 3 + 2] += (Math.random() - 0.5) * 0.1;  // Deform Z
+                });
+
+                geometry.attributes.position.needsUpdate = true;  // Tell Three.js the vertices have changed
+            }
+        }
+
+        // 定义消息数组
+const messages = [
+    '如何油亮？',
+    '快速变颜色',
+    '什么品种值钱',
+    '怎样购买最靠谱',
+    '三棱和四棱',
+    '核桃下树了吗？',
+    '文玩人必备',
+    '油亮就是好？',
+    '入门阶段怎么选',
+    '需不需要打底'
+];
+
+function showMessage() {
+    if (messagesShown >= maxMessages) return;  // Stop showing messages if maximum is reached
+
+    let message = document.createElement('div');
+    message.classList.add('message');
+    
+    // 随机选择一条消息
+    const randomIndex = Math.floor(Math.random() * messages.length);
+    message.textContent = messages[randomIndex]; 
+
+    document.body.appendChild(message);
+
+    // Randomize position
+    message.style.left = `${Math.random() * window.innerWidth}px`;
+    message.style.top = `${Math.random() * window.innerHeight}px`;
+    message.style.opacity = 1;
+
+    // Add click event for jumping to URL
+    message.addEventListener('click', () => {
+        window.location.href = 'https://newart.city/preview/walnut-space-1';
+    });
+
+    messagesShown++;  // Increase the count of shown messages
+}
+
+
+        // Render loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
+
+
+
+
+
+
